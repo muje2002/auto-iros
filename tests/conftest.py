@@ -37,15 +37,22 @@ def mock_config_with_payment() -> Config:
     )
 
 
-def has_env_file() -> bool:
-    """실제 .env 파일이 존재하는지 확인"""
-    return os.path.exists(os.path.join(os.path.dirname(__file__), "..", ".env"))
+def _can_load_config() -> bool:
+    """실제 .env가 있고 Config.from_env()가 성공하는지 확인"""
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if not os.path.exists(env_path):
+        return False
+    try:
+        Config.from_env()
+        return True
+    except ValueError:
+        return False
 
 
 # 실제 API 키가 있을 때만 실행하는 마커
 requires_env = pytest.mark.skipif(
-    not has_env_file(),
-    reason=".env 파일 없음 - 실제 API 테스트 스킵",
+    not _can_load_config(),
+    reason=".env 미설정 - 실제 API 테스트 스킵",
 )
 
 

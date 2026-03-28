@@ -13,6 +13,10 @@ env/
 # Environment
 .env
 
+# Dev notes (local only)
+dev_history.md
+CLAUDE.md
+
 # Output
 output/
 

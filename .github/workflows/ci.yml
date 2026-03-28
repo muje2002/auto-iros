@@ -35,4 +35,13 @@ jobs:
         run: mypy src/ --ignore-missing-imports
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: |
+          set -o pipefail
+          pytest tests/ -v --tb=long 2>&1 | tee test-output.txt
+
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ matrix.python-version }}
+          path: test-output.txt

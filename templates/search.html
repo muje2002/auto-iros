@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}주소 검색 - auto-iros{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-800 mb-6">주소 검색</h1>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 max-w-2xl mb-6">
+    <form id="search-form" onsubmit="submitSearch(event)">
+        <div class="flex gap-3">
+            <input type="text" id="query" placeholder="검색어 입력 (최소 3자리, 예: 테헤란로)" class="flex-1 border rounded px-3 py-2" required minlength="3">
+            <select id="realty_type" class="border rounded px-3 py-2">
+                <option value="토지+건물">토지+건물</option>
+                <option value="집합건물">집합건물</option>
+                <option value="토지">토지</option>
+                <option value="건물">건물</option>
+            </select>
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">검색</button>
+        </div>
+    </form>
+</div>
+
+<div id="result-area"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function submitSearch(e) {
+    e.preventDefault();
+    const query = document.getElementById('query').value;
+    const realtyType = document.getElementById('realty_type').value;
+
+    showLoading('주소 검색 중...');
+    document.getElementById('result-area').innerHTML = '';
+
+    try {
+        const res = await apiPost('/api/search', { query, realty_type: realtyType });
+        hideLoading();
+
+        if (res.status === 'success' && res.addr_list) {
+            document.getElementById('result-area').innerHTML =
+                `<div class="bg-white rounded-lg shadow p-4">
+                    <h2 class="text-lg font-semibold mb-3">검색 결과 (${res.count}건)</h2>
+                    ${renderAddressTable(res.addr_list, { onQuery: true })}
+                </div>`;
+        } else {
+            showAlert(document.getElementById('result-area'), res.message || '검색 결과가 없습니다.', 'info');
+        }
+    } catch (err) {
+        hideLoading();
+        showAlert(document.getElementById('result-area'), '검색 오류: ' + err.message, 'error');
+    }
+}
+</script>
+{% endblock %}

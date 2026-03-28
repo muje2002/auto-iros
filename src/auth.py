@@ -1,10 +1,17 @@
-"""CODEF API OAuth2 인증 모듈"""
+"""CODEF API OAuth2 인증 모듈
+
+참조: https://developer.codef.io/common-guide/rest-api#인증(Authentication)
+참조: https://github.com/codef-io/easycodefpy
+"""
 
 import base64
+import logging
 import time
 import requests
 
 from .config import CODEF_TOKEN_URL, Config
+
+logger = logging.getLogger(__name__)
 
 
 class CodefAuth:
@@ -24,8 +31,13 @@ class CodefAuth:
         return self._token
 
     def _request_token(self) -> str:
-        """CODEF OAuth2 서버에서 액세스 토큰 발급"""
-        # Basic Auth: base64(client_id:client_secret)
+        """CODEF OAuth2 서버에서 액세스 토큰 발급
+
+        POST https://oauth.codef.io/oauth/token
+        Authorization: Basic base64(client_id:client_secret)
+        Content-Type: application/x-www-form-urlencoded
+        Body: grant_type=client_credentials&scope=read
+        """
         credentials = f"{self.config.client_id}:{self.config.client_secret}"
         encoded = base64.b64encode(credentials.encode()).decode()
 
@@ -34,14 +46,16 @@ class CodefAuth:
             headers={
                 "Authorization": f"Basic {encoded}",
                 "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
             },
-            data={"grant_type": "client_credentials"},
+            data={"grant_type": "client_credentials", "scope": "read"},
             timeout=30,
         )
         response.raise_for_status()
 
         data = response.json()
         self._token_expires_at = time.time() + data.get("expires_in", 3600) - 60
+        logger.info("CODEF 토큰 발급 성공 (만료: %ds)", data.get("expires_in", 0))
         return data["access_token"]
 
     def get_headers(self) -> dict:

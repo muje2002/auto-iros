@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}auto-iros{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen text-gray-900 dark:text-gray-100 transition-colors">
+    <!-- 네비게이션 -->
+    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <a href="/" class="text-lg font-bold text-blue-600 dark:text-blue-400">auto-iros</a>
+                <!-- 모바일 메뉴 버튼 -->
+                <button id="menu-toggle" class="md:hidden p-2 text-gray-600 dark:text-gray-300" onclick="document.getElementById('nav-links').classList.toggle('hidden')">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <!-- 데스크탑 메뉴 -->
+                <div class="hidden md:flex items-center gap-6 text-sm">
+                    <a href="/single" class="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">단건 조회</a>
+                    <a href="/batch" class="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">일괄 조회</a>
+                    <a href="/search" class="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">주소 검색</a>
+                    <a href="/api/template/download" class="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">템플릿</a>
+                    <button onclick="toggleDark()" class="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="다크모드 전환">
+                        <span id="theme-icon">🌙</span>
+                    </button>
+                </div>
+            </div>
+            <!-- 모바일 메뉴 -->
+            <div id="nav-links" class="hidden md:hidden pb-3 space-y-2 text-sm">
+                <a href="/single" class="block text-gray-600 dark:text-gray-300 hover:text-blue-600">단건 조회</a>
+                <a href="/batch" class="block text-gray-600 dark:text-gray-300 hover:text-blue-600">일괄 조회</a>
+                <a href="/search" class="block text-gray-600 dark:text-gray-300 hover:text-blue-600">주소 검색</a>
+                <a href="/api/template/download" class="block text-gray-600 dark:text-gray-300 hover:text-blue-600">템플릿 다운로드</a>
+                <button onclick="toggleDark()" class="text-gray-600 dark:text-gray-300">🌙 다크모드 전환</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 점검 경고 배너 -->
+    {% if maintenance_warning %}
+    <div class="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 px-4 py-3 text-center">
+        <span class="text-amber-800 dark:text-amber-300 text-sm font-medium">⚠ {{ maintenance_warning }}</span>
+    </div>
+    {% endif %}
+
+    <!-- 메인 콘텐츠 -->
+    <main class="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        function toggleDark() {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+        }
+        // 저장된 테마 복원
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('theme-icon').textContent = '☀️';
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

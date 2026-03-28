@@ -14,7 +14,10 @@ env/
 .env
 
 # Output
-output/*.pdf
+output/
+
+# Playwright
+.playwright-mcp/
 
 # IDE
 .vscode/

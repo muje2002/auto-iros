@@ -3,7 +3,7 @@
 ## 1. 개요
 
 ### 1.1 프로젝트 목적
-인터넷 등기소(iros.go.kr)에서 부동산 등기부등본을 CODEF API를 통해 자동으로 열람/발급받아 PDF로 저장하는 Python CLI 프로그램.
+인터넷 등기소(iros.go.kr)에서 부동산 등기부등본을 CODEF API를 통해 자동으로 열람/발급받아 PDF로 저장하는 Python 프로그램. CLI 및 웹 브라우저 인터페이스를 제공한다.
 
 ### 1.2 배경
 - 부동산 실무에서 다수의 등기부등본을 반복적으로 발급받아야 하는 수요 존재
@@ -172,7 +172,36 @@
 - [ ] `search` - 주소 검색 (간편검색, 발급 없이 주소 목록만)
 - [ ] rich 기반 터미널 UI
 
-### 3.2 Phase 2: 고급 기능
+### 3.2 Phase 1.5: 웹 UI
+
+#### F12. FastAPI 웹 서버
+- [ ] FastAPI 기반 웹 서버 (`app.py`)
+- [ ] Jinja2 HTML 템플릿 + Tailwind CSS CDN
+- [ ] 정적 파일 서빙 (`/static`)
+- [ ] `uvicorn app:app` 으로 실행
+- [ ] 기존 CLI (`main.py`)와 공존
+
+#### F13. 웹 단건 조회
+- [ ] 조회구분(inquiryType) 선택에 따른 동적 폼
+- [ ] 2-Way 추가인증: 브라우저에서 주소 목록 표시 → 클릭 선택 → 2차 요청
+- [ ] 서버 측 세션으로 2-Way 상태 관리 (120초 만료)
+- [ ] PDF 브라우저 다운로드
+- [ ] 로딩 스피너, 에러 메시지 표시
+
+#### F14. 웹 일괄 조회
+- [ ] 엑셀 파일 업로드 (drag & drop)
+- [ ] 업로드 후 요청 목록 미리보기 테이블
+- [ ] 일괄 실행 → 결과 테이블 (성공/실패, PDF 다운로드 링크)
+- [ ] 개별 PDF 다운로드
+
+#### F15. 웹 주소 검색
+- [ ] 검색어 입력 → 주소 목록 테이블 표시
+- [ ] "이 주소로 조회" 버튼 → 단건 조회 폼 연동
+
+#### F16. 웹 템플릿 다운로드
+- [ ] 브라우저에서 엑셀 템플릿 다운로드
+
+### 3.3 Phase 2: 고급 기능
 
 #### F8. 조회 결과 구조화
 - [ ] 등기사항 요약 (resRegistrationSumList) 파싱 및 출력
@@ -225,27 +254,37 @@
 ```
 auto-iros/
 ├── main.py                     # CLI 진입점
+├── app.py                      # FastAPI 웹 서버 진입점
 ├── src/
 │   ├── config.py               # 환경설정 + 상수
 │   ├── auth.py                 # CODEF OAuth2 인증
-│   ├── crypto.py               # RSA 비밀번호 암호화 (신규)
-│   ├── codef_api.py            # API 클라이언트 (전면 수정)
-│   ├── two_way.py              # 2-Way 추가인증 처리 (신규)
-│   ├── payment.py              # 전자민원캐시 결제 (신규)
+│   ├── crypto.py               # RSA 비밀번호 암호화
+│   ├── codef_api.py            # API 클라이언트
+│   ├── two_way.py              # 2-Way 추가인증 (순수 로직 + CLI 어댑터)
+│   ├── payment.py              # 전자민원캐시 결제
 │   ├── excel_handler.py        # 엑셀 입출력
-│   └── pdf_handler.py          # PDF 저장
+│   ├── pdf_handler.py          # PDF 저장
+│   └── routes/                 # FastAPI 라우트 핸들러
+│       ├── single.py           # 단건 조회 API
+│       ├── batch.py            # 일괄 조회 API
+│       ├── search.py           # 주소 검색 API
+│       └── template.py         # 템플릿 다운로드 API
+├── templates/                  # Jinja2 HTML 템플릿
+│   ├── base.html
+│   ├── index.html
+│   ├── single.html
+│   ├── batch.html
+│   └── search.html
+├── static/                     # 정적 파일
+│   ├── css/style.css
+│   └── js/app.js
 ├── docs/
-│   ├── PRD.md                  # 이 문서
-│   └── API_SPEC.md             # API 스펙 정리
-├── templates/                  # 엑셀 템플릿
+│   └── PRD.md
 ├── output/                     # PDF 출력
-├── .github/
-│   └── workflows/
-│       └── ci.yml              # CI/CD
+├── .github/workflows/ci.yml
 ├── .env.example
 ├── requirements.txt
 ├── CLAUDE.md
-├── dev_history.md
 └── README.md
 ```
 
@@ -255,7 +294,10 @@ auto-iros/
 - `pycryptodome` - RSA 암호화
 - `openpyxl` - 엑셀 처리
 - `python-dotenv` - 환경변수
-- `rich` - 터미널 UI
+- `rich` - 터미널 UI (CLI)
+- `fastapi` + `uvicorn` - 웹 서버
+- `jinja2` - HTML 템플릿
+- Tailwind CSS (CDN) - 프론트엔드 스타일링
 - GitHub Actions - CI (lint, type check)
 
 ### 5.3 설정 파일 (.env)
@@ -282,17 +324,32 @@ OUTPUT_DIR=./output
 5. `payment.py` - 전자민원캐시 결제 연동
 6. `pdf_handler.py` - `resOriGinalData` 필드명 수정
 
-### Sprint 2: 엑셀 & CLI 보강
-1. `excel_handler.py` - inquiryType별 엑셀 컬럼 확장
-2. `main.py` - `search` 명령 추가, 2-Way 인터랙션 UI
-3. 에러 코드 한국어 매핑
-4. 대법원 점검시간 경고
+### Sprint 1.5: 웹 UI 구현
+1. `two_way.py` - 순수 로직 분리 (build_two_way_params)
+2. `app.py` - FastAPI 서버 + Jinja2 설정
+3. `src/routes/` - REST API 엔드포인트 (single, batch, search, template)
+4. `templates/` - HTML 페이지 (base, index, single, batch, search)
+5. `static/` - JS/CSS (fetch 래퍼, 로딩 UI, Tailwind)
 
-### Sprint 3: CI/CD & 안정성
-1. GitHub Actions 워크플로우 (lint, mypy, pytest)
-2. 재시도 로직
-3. IP 차단 방지 rate limiting
-4. 결과 엑셀 내보내기
+### Sprint 2: 안정성 & UX (완료)
+1. 에러 코드 한국어 매핑 (`errors.py`)
+2. 재시도 로직 (최대 3회, 지수 백오프)
+3. 대법원 점검시간 경고 (`maintenance.py`)
+4. IP 차단 방지 rate limiting (배치 1.5초 딜레이)
+5. 결과 엑셀 내보내기
+
+### Sprint 3: 고급 기능 + 연동 테스트
+1. 실제 CODEF 데모 API 연동 테스트 (토큰, 검색, 조회)
+2. 등기사항 요약 파싱 (`resRegistrationSumList`)
+3. 등기 이력 조회 (`resRegistrationHisList`)
+4. 실패 건 재처리 (배치)
+5. 웹 단건 조회 소재지번/도로명 폼 확장
+
+### Sprint 4: 테스트 & CI
+1. pytest 단위테스트 (핵심 모듈)
+2. pytest 통합테스트 (CODEF API mock)
+3. pytest E2E 테스트 (FastAPI TestClient)
+4. GitHub Actions CI 보강 (pytest + 커버리지)
 
 ---
 
@@ -324,7 +381,72 @@ jobs:
 
 ---
 
-## 8. 리스크 및 제약사항
+## 8. 테스트 전략
+
+### 8.1 원칙
+- **각 개발 Step마다** 해당 기능의 단위테스트를 함께 작성
+- **모든 개발 Step 완료 후** 전체 E2E 테스트 스위트 작성 및 실행
+- CI에서 자동 실행 (`pytest tests/ -v`)
+
+### 8.2 테스트 레벨
+
+#### Level 1: 단위 테스트 (외부 의존 없음)
+| 모듈 | 테스트 항목 |
+|------|------------|
+| `crypto.py` | RSA 암호화 라운드트립 (생성 키로 검증) |
+| `errors.py` | 에러 코드 매핑, fallback, retryable 판단 |
+| `maintenance.py` | 1/3째주 목요일 점검 감지 (6개 시나리오) |
+| `payment.py` | 결제 필요 여부, ePrepay 검증 |
+| `excel_handler.py` | 템플릿 생성/읽기, 결과 내보내기 |
+| `codef_api.py` | RegisterRequest.to_api_params 파라미터 생성 |
+| `two_way.py` | build_two_way_params 순수 로직 |
+
+#### Level 2: 통합 테스트 (CODEF API mock)
+| 모듈 | 테스트 항목 |
+|------|------------|
+| `codef_api.py` | 성공 응답 파싱, 2-Way 감지, 에러 처리 |
+| `codef_api.py` | 재시도 로직 (retryable → 재시도, 비retryable → 즉시 반환) |
+| `codef_api.py` | 타임아웃, 네트워크 오류 |
+| `auth.py` | 토큰 캐싱, 만료 갱신 |
+
+#### Level 3: 웹 API E2E (FastAPI TestClient)
+| 엔드포인트 | 시나리오 |
+|-----------|---------|
+| HTML 페이지 | /, /single, /batch, /search → 200 렌더링 |
+| 템플릿 다운로드 | GET /api/template/download → xlsx 정상 다운로드 |
+| 검색 API | 성공 → addr_list, 에러 → 에러 메시지 |
+| 단건 조회 | 성공 → PDF URL, 2-Way → session + addr_list, 에러 → 메시지 |
+| 2-Way 흐름 | 세션 생성 → 선택 → 최종 결과, 만료 세션 → 에러 |
+| 배치 업로드 | xlsx → preview 반환, 잘못된 파일 → 에러 |
+| 배치 실행 | execute → 결과 + result_excel |
+| .env 미설정 | 모든 API → ".env 설정 필요" 안내 |
+
+#### Level 4: 실제 API 연동 (수동, CI 제외)
+| 대상 | 시나리오 |
+|------|---------|
+| 토큰 발급 | 데모 client_id/secret → access_token |
+| 주소 검색 | 간편검색 → 주소 목록 |
+| 등기부등본 조회 | 데모 데이터 → PDF 또는 응답 확인 |
+
+### 8.3 테스트 구조
+```
+tests/
+├── conftest.py              # 공통 fixture (Config mock, TestClient 등)
+├── test_crypto.py           # Level 1
+├── test_errors.py           # Level 1
+├── test_maintenance.py      # Level 1
+├── test_payment.py          # Level 1
+├── test_excel_handler.py    # Level 1
+├── test_codef_api.py        # Level 1 + Level 2 (mock)
+├── test_two_way.py          # Level 1
+├── test_web_pages.py        # Level 3 (HTML 렌더링)
+├── test_web_api.py          # Level 3 (API 엔드포인트)
+└── test_web_e2e.py          # Level 3 (시나리오 흐름)
+```
+
+---
+
+## 9. 리스크 및 제약사항
 
 | 리스크 | 영향 | 대응 |
 |--------|------|------|
@@ -336,7 +458,7 @@ jobs:
 
 ---
 
-## 9. 성공 지표
+## 10. 성공 지표
 
 - 단건 등기부등본 발급 성공률 > 95%
 - 50건 일괄 발급 소요 시간 < 30분

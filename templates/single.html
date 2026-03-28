@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}단건 조회 - auto-iros{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-800 mb-6">단건 등기부등본 조회</h1>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 max-w-2xl">
+    <form id="single-form" onsubmit="submitSingle(event)">
+        <!-- 조회구분 -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">조회구분</label>
+            <select id="inquiry_type" name="inquiry_type" onchange="toggleFields()" class="w-full border dark:border-gray-600 dark:bg-gray-700 rounded px-3 py-2">
+                <option value="간편검색">간편검색</option>
+                <option value="고유번호">고유번호</option>
+                <option value="소재지번">소재지번</option>
+                <option value="도로명주소">도로명주소</option>
+            </select>
+        </div>
+
+        <!-- 간편검색: 주소 -->
+        <div id="field-address" class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">검색어 (주소)</label>
+            <input type="text" id="address" name="address" placeholder="예: 테헤란로 123" class="w-full border dark:border-gray-600 dark:bg-gray-700 rounded px-3 py-2">
+        </div>
+
+        <!-- 고유번호 -->
+        <div id="field-unique-no" class="mb-4 hidden">
+            <label class="block text-sm font-medium text-gray-700 mb-1">고유번호</label>
+            <input type="text" id="unique_no" name="unique_no" placeholder="0000-0000-000000" class="w-full border dark:border-gray-600 dark:bg-gray-700 rounded px-3 py-2">
+        </div>
+
+        <!-- 소재지번 (inquiryType=2) -->
+        <div id="field-lot" class="mb-4 hidden">
+            <p class="text-sm font-medium text-gray-700 mb-2">소재지번 정보</p>
+            <div class="grid grid-cols-3 gap-2">
+                <input type="text" id="addr_sido" placeholder="시/도" class="border rounded px-3 py-2">
+                <input type="text" id="addr_dong_lot" placeholder="읍면동/리" class="border rounded px-3 py-2">
+                <input type="text" id="addr_lot_number" placeholder="지번" class="border rounded px-3 py-2">
+            </div>
+        </div>
+
+        <!-- 도로명주소 (inquiryType=3) -->
+        <div id="field-road" class="mb-4 hidden">
+            <p class="text-sm font-medium text-gray-700 mb-2">도로명주소 정보</p>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+                <input type="text" id="addr_sido_road" placeholder="시/도" class="border rounded px-3 py-2">
+                <input type="text" id="addr_sigungu" placeholder="시군구" class="border rounded px-3 py-2">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <input type="text" id="addr_road_name" placeholder="도로명" class="border rounded px-3 py-2">
+                <input type="text" id="addr_building_number" placeholder="건물번호" class="border rounded px-3 py-2">
+            </div>
+        </div>
+
+        <!-- 공통 옵션 -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">부동산구분</label>
+                <select id="realty_type" name="realty_type" class="w-full border dark:border-gray-600 dark:bg-gray-700 rounded px-3 py-2">
+                    <option value="토지+건물">토지+건물</option>
+                    <option value="집합건물">집합건물</option>
+                    <option value="토지">토지</option>
+                    <option value="건물">건물</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">발급유형</label>
+                <select id="issue_type" name="issue_type" class="w-full border dark:border-gray-600 dark:bg-gray-700 rounded px-3 py-2">
+                    <option value="열람">열람</option>
+                    <option value="발급">발급</option>
+                    <option value="고유번호조회">고유번호조회</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 동/호 -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">동 (집합건물)</label>
+                <input type="text" id="dong" name="dong" placeholder="101동" class="w-full border dark:border-gray-600 dark:bg-gray-700 rounded px-3 py-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">호 (집합건물)</label>
+                <input type="text" id="ho" name="ho" placeholder="202호" class="w-full border dark:border-gray-600 dark:bg-gray-700 rounded px-3 py-2">
+            </div>
+        </div>
+
+        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">
+            조회하기
+        </button>
+    </form>
+</div>
+
+<!-- 결과 영역 -->
+<div id="result-area" class="mt-6 max-w-2xl"></div>
+
+<!-- 2-Way 주소 선택 영역 -->
+<div id="two-way-area" class="mt-6 max-w-4xl hidden">
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+        <p class="text-yellow-800 font-medium">검색 결과가 여러 건입니다. 아래에서 선택해주세요.</p>
+        <p class="text-yellow-600 text-sm">120초 이내에 선택해야 합니다.</p>
+    </div>
+    <div id="two-way-list"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSessionId = null;
+
+// URL 파라미터로 고유번호가 전달된 경우 자동 설정
+const params = new URLSearchParams(window.location.search);
+if (params.get('unique_no')) {
+    document.getElementById('inquiry_type').value = '고유번호';
+    document.getElementById('unique_no').value = params.get('unique_no');
+    toggleFields();
+}
+
+function toggleFields() {
+    const type = document.getElementById('inquiry_type').value;
+    document.getElementById('field-address').classList.toggle('hidden', type === '고유번호' || type === '소재지번' || type === '도로명주소');
+    document.getElementById('field-unique-no').classList.toggle('hidden', type !== '고유번호');
+    document.getElementById('field-lot').classList.toggle('hidden', type !== '소재지번');
+    document.getElementById('field-road').classList.toggle('hidden', type !== '도로명주소');
+}
+
+async function submitSingle(e) {
+    e.preventDefault();
+    const data = {
+        inquiry_type: document.getElementById('inquiry_type').value,
+        address: document.getElementById('address').value,
+        unique_no: document.getElementById('unique_no').value,
+        dong: document.getElementById('dong').value,
+        ho: document.getElementById('ho').value,
+        realty_type: document.getElementById('realty_type').value,
+        issue_type: document.getElementById('issue_type').value,
+        addr_sido: document.getElementById('addr_sido').value || document.getElementById('addr_sido_road').value,
+        addr_dong: document.getElementById('addr_dong_lot').value,
+        addr_lot_number: document.getElementById('addr_lot_number').value,
+        addr_sigungu: document.getElementById('addr_sigungu').value,
+        addr_road_name: document.getElementById('addr_road_name').value,
+        addr_building_number: document.getElementById('addr_building_number').value,
+    };
+
+    showLoading('CODEF API 요청 중... (최대 5분 소요)');
+    document.getElementById('two-way-area').classList.add('hidden');
+    document.getElementById('result-area').innerHTML = '';
+
+    try {
+        const res = await apiPost('/api/single', data);
+        hideLoading();
+
+        if (res.status === 'two_way') {
+            currentSessionId = res.session_id;
+            document.getElementById('two-way-area').classList.remove('hidden');
+            document.getElementById('two-way-list').innerHTML =
+                renderAddressTable(res.addr_list, { onSelect: 'selectTwoWay' });
+        } else if (res.status === 'success') {
+            showResult(res);
+        } else {
+            showAlert(document.getElementById('result-area'), res.message, 'error');
+        }
+    } catch (err) {
+        hideLoading();
+        showAlert(document.getElementById('result-area'), '요청 중 오류가 발생했습니다: ' + err.message, 'error');
+    }
+}
+
+async function selectTwoWay(index) {
+    showLoading('2차 요청 중... (최대 2분 소요)');
+    try {
+        const res = await apiPost('/api/single/two-way', {
+            session_id: currentSessionId,
+            selected_index: index,
+        });
+        hideLoading();
+        document.getElementById('two-way-area').classList.add('hidden');
+
+        if (res.status === 'success') {
+            showResult(res);
+        } else {
+            showAlert(document.getElementById('result-area'), res.message, 'error');
+        }
+    } catch (err) {
+        hideLoading();
+        showAlert(document.getElementById('result-area'), '2차 요청 오류: ' + err.message, 'error');
+    }
+}
+
+function showResult(res) {
+    let html = `<div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+        <p class="text-green-800 font-medium">조회 성공: ${res.display_name || ''}</p>`;
+    if (res.has_pdf && res.pdf_id) {
+        html += `<a href="/api/single/pdf/${res.pdf_id}" class="inline-block mt-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm">PDF 다운로드</a>`;
+    } else {
+        html += '<p class="text-green-600 text-sm mt-1">PDF 데이터 없음 (고유번호조회 등)</p>';
+    }
+    html += '</div>';
+
+    // 등기사항 요약
+    if (res.registration_summary && res.registration_summary.length > 0) {
+        html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-2">등기사항 요약</h3>
+            <table class="w-full text-sm border-collapse">
+                <thead><tr class="bg-gray-50 border-b">
+                    <th class="text-left p-2">구분</th>
+                    <th class="text-left p-2">내용</th>
+                    <th class="text-left p-2 w-28">접수일자</th>
+                </tr></thead><tbody>`;
+        res.registration_summary.forEach(s => {
+            html += `<tr class="border-b"><td class="p-2 font-medium">${s.category}</td><td class="p-2">${s.content}</td><td class="p-2 text-gray-500">${s.date}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    // 등기 이력
+    if (res.registration_history && res.registration_history.length > 0) {
+        html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-2">등기 이력</h3>
+            <table class="w-full text-sm border-collapse">
+                <thead><tr class="bg-gray-50 border-b">
+                    <th class="text-left p-2 w-20">유형</th>
+                    <th class="text-left p-2">등기 목적</th>
+                    <th class="text-left p-2 w-28">접수일자</th>
+                    <th class="text-left p-2 w-24">접수번호</th>
+                </tr></thead><tbody>`;
+        res.registration_history.forEach(h => {
+            html += `<tr class="border-b"><td class="p-2">${h.type}</td><td class="p-2">${h.purpose}</td><td class="p-2 text-gray-500">${h.date}</td><td class="p-2 text-gray-500">${h.number}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    document.getElementById('result-area').innerHTML = html;
+}
+</script>
+{% endblock %}

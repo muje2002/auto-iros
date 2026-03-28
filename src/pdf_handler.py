@@ -12,7 +12,7 @@ def sanitize_filename(name: str) -> str:
     """파일명에 사용할 수 없는 문자 제거"""
     name = re.sub(r'[<>:"/\\|?*]', "_", name)
     name = re.sub(r"\s+", "_", name)
-    return name[:100]  # 최대 길이 제한
+    return name[:100]
 
 
 def save_pdf(result: RegisterResult, output_dir: str) -> str | None:
@@ -23,8 +23,8 @@ def save_pdf(result: RegisterResult, output_dir: str) -> str | None:
     os.makedirs(output_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_address = sanitize_filename(result.address)
-    filename = f"등기부등본_{safe_address}_{timestamp}.pdf"
+    safe_name = sanitize_filename(result.request.display_name)
+    filename = f"등기부등본_{safe_name}_{timestamp}.pdf"
     filepath = os.path.join(output_dir, filename)
 
     pdf_bytes = base64.b64decode(result.pdf_base64)
@@ -45,7 +45,7 @@ def save_batch_pdfs(
             filepath = save_pdf(result, output_dir)
             summaries.append(
                 {
-                    "address": result.address,
+                    "address": result.request.display_name,
                     "status": "성공",
                     "file": filepath,
                 }
@@ -53,7 +53,7 @@ def save_batch_pdfs(
         else:
             summaries.append(
                 {
-                    "address": result.address,
+                    "address": result.request.display_name,
                     "status": "실패",
                     "file": None,
                     "error": result.error_message or "PDF 데이터 없음",

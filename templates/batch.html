@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}일괄 조회 - auto-iros{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-800 mb-6">일괄 등기부등본 조회</h1>
+
+<!-- 파일 업로드 -->
+<div id="upload-section" class="max-w-2xl mb-6">
+    <div id="drop-zone" class="drop-zone bg-white" onclick="document.getElementById('file-input').click()">
+        <p class="text-gray-500 mb-1">엑셀 파일을 드래그하거나 클릭하여 업로드</p>
+        <p class="text-gray-400 text-sm">(.xlsx 형식)</p>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls" class="hidden" onchange="uploadFile(this.files[0])">
+    <p class="text-sm text-gray-400 mt-2">
+        템플릿이 필요하시면 <a href="/api/template/download" class="text-blue-600 hover:underline">여기서 다운로드</a>하세요.
+    </p>
+</div>
+
+<!-- 미리보기 -->
+<div id="preview-section" class="hidden max-w-4xl mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-3">요청 목록 미리보기</h2>
+        <div id="preview-table"></div>
+        <div class="mt-4 flex gap-3">
+            <button onclick="executeAll()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">
+                전체 실행
+            </button>
+            <button onclick="resetUpload()" class="bg-gray-200 text-gray-700 px-6 py-2 rounded hover:bg-gray-300 transition">
+                취소
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 결과 -->
+<div id="result-area" class="max-w-4xl"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let requestsData = null;
+
+// 드래그 앤 드롭
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+});
+
+async function uploadFile(file) {
+    if (!file) return;
+    showLoading('엑셀 파일 파싱 중...');
+
+    try {
+        const res = await apiUpload('/api/batch/upload', file);
+        hideLoading();
+
+        if (res.status === 'success') {
+            requestsData = res.requests_data;
+            renderPreview(res.preview);
+            document.getElementById('upload-section').classList.add('hidden');
+            document.getElementById('preview-section').classList.remove('hidden');
+        } else {
+            showAlert(document.getElementById('result-area'), res.message, 'error');
+        }
+    } catch (err) {
+        hideLoading();
+        showAlert(document.getElementById('result-area'), '업로드 오류: ' + err.message, 'error');
+    }
+}
+
+function renderPreview(preview) {
+    let html = `
+        <table class="w-full text-sm border-collapse">
+            <thead>
+                <tr class="bg-gray-50 border-b">
+                    <th class="text-left p-2 w-10">#</th>
+                    <th class="text-left p-2 w-20">조회구분</th>
+                    <th class="text-left p-2">주소/고유번호</th>
+                    <th class="text-left p-2 w-20">동/호</th>
+                    <th class="text-left p-2 w-20">부동산구분</th>
+                    <th class="text-left p-2 w-16">발급유형</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+    preview.forEach((item, i) => {
+        const dongHo = [item.dong, item.ho].filter(Boolean).join(' ') || '-';
+        html += `
+            <tr class="border-b">
+                <td class="p-2 text-gray-400">${i + 1}</td>
+                <td class="p-2">${item.inquiry_type}</td>
+                <td class="p-2">${item.display_name}</td>
+                <td class="p-2">${dongHo}</td>
+                <td class="p-2">${item.realty_type}</td>
+                <td class="p-2">${item.issue_type}</td>
+            </tr>`;
+    });
+
+    html += '</tbody></table>';
+    html += `<p class="text-sm text-gray-500 mt-2">총 ${preview.length}건</p>`;
+    document.getElementById('preview-table').innerHTML = html;
+}
+
+async function executeAll() {
+    if (!requestsData) return;
+
+    const resultArea = document.getElementById('result-area');
+    resultArea.innerHTML = `
+        <div class="bg-white rounded-lg shadow p-4">
+            <h2 class="text-lg font-semibold mb-2">처리 중...</h2>
+            <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <div id="progress-bar" class="bg-blue-600 h-3 rounded-full transition-all" style="width: 0%"></div>
+            </div>
+            <p id="progress-text" class="text-sm text-gray-500">준비 중...</p>
+            <div id="progress-log" class="mt-3 text-xs text-gray-400 max-h-40 overflow-y-auto"></div>
+        </div>`;
+
+    try {
+        const response = await fetch('/api/batch/execute-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests_data: requestsData }),
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            const err = await response.json();
+            showAlert(resultArea, err.message || '실행 오류', 'error');
+            return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const events = buffer.split('\n\n');
+            buffer = events.pop();
+
+            for (const evt of events) {
+                const lines = evt.trim().split('\n');
+                let eventType = '', eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+                const data = JSON.parse(eventData);
+
+                if (eventType === 'progress') {
+                    const pct = Math.round((data.current / data.total) * 100);
+                    document.getElementById('progress-bar').style.width = pct + '%';
+                    document.getElementById('progress-text').textContent =
+                        `[${data.current}/${data.total}] ${data.address} 처리 중...`;
+                } else if (eventType === 'item') {
+                    const icon = data.success ? '✓' : '✗';
+                    const cls = data.success ? 'text-green-600' : 'text-red-500';
+                    document.getElementById('progress-log').innerHTML +=
+                        `<div class="${cls}">${icon} [${data.current}/${data.total}] ${data.address}</div>`;
+                } else if (eventType === 'done') {
+                    renderResults(data);
+                }
+            }
+        }
+    } catch (err) {
+        showAlert(resultArea, '실행 오류: ' + err.message, 'error');
+    }
+}
+
+let failedRequests = null;
+
+function renderResults(res) {
+    failedRequests = res.failed_requests || [];
+    const failCount = res.count - res.success_count;
+
+    let html = `
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-lg font-semibold">처리 결과</h2>
+                    <p class="text-sm text-gray-500">성공 ${res.success_count}건 / 실패 ${failCount}건</p>
+                </div>
+                <div class="flex gap-2">
+                    ${failedRequests.length > 0 ? `<button onclick="retryFailed()" class="bg-amber-500 text-white px-4 py-2 rounded hover:bg-amber-600 text-sm">실패 ${failedRequests.length}건 재처리</button>` : ''}
+                    ${res.result_excel ? `<a href="/api/batch/download/${encodeURIComponent(res.result_excel)}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm">결과 엑셀 다운로드</a>` : ''}
+                </div>
+            </div>
+            <table class="w-full text-sm border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 border-b">
+                        <th class="text-left p-2 w-10">#</th>
+                        <th class="text-left p-2">주소</th>
+                        <th class="text-left p-2 w-16">상태</th>
+                        <th class="text-left p-2 w-32">파일/오류</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+    res.results.forEach((r, i) => {
+        const statusClass = r.status === '성공' ? 'text-green-600' : 'text-red-600';
+        let detail = '';
+        if (r.filename) {
+            detail = `<a href="/api/batch/download/${encodeURIComponent(r.filename)}" class="text-blue-600 hover:underline">다운로드</a>`;
+        } else if (r.error) {
+            detail = `<span class="text-red-500 text-xs">${r.error}</span>`;
+        }
+        html += `
+            <tr class="border-b">
+                <td class="p-2 text-gray-400">${i + 1}</td>
+                <td class="p-2">${r.address}</td>
+                <td class="p-2 ${statusClass} font-medium">${r.status}</td>
+                <td class="p-2">${detail}</td>
+            </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    document.getElementById('result-area').innerHTML = html;
+    document.getElementById('preview-section').classList.add('hidden');
+}
+
+async function retryFailed() {
+    if (!failedRequests || failedRequests.length === 0) return;
+    showLoading(`실패 건 재처리 중... (${failedRequests.length}건)`);
+    try {
+        const res = await apiPost('/api/batch/execute', { requests_data: failedRequests });
+        hideLoading();
+        if (res.status === 'success') {
+            renderResults(res);
+        } else {
+            showAlert(document.getElementById('result-area'), res.message, 'error');
+        }
+    } catch (err) {
+        hideLoading();
+        showAlert(document.getElementById('result-area'), '재처리 오류: ' + err.message, 'error');
+    }
+}
+
+function resetUpload() {
+    requestsData = null;
+    document.getElementById('upload-section').classList.remove('hidden');
+    document.getElementById('preview-section').classList.add('hidden');
+    document.getElementById('result-area').innerHTML = '';
+    document.getElementById('file-input').value = '';
+}
+</script>
+{% endblock %}

@@ -9,7 +9,7 @@ from src.config import Config
 
 @pytest.fixture
 def mock_config() -> Config:
-    """테스트용 Config (실제 API 호출 없이 사용)"""
+    """테스트용 Config (demo 환경, 결제 정보 없음)"""
     return Config(
         client_id="test_client_id",
         client_secret="test_client_secret",
@@ -19,21 +19,23 @@ def mock_config() -> Config:
         password="1234",
         eprepay_no="",
         eprepay_pass="",
+        env="demo",
     )
 
 
 @pytest.fixture
 def mock_config_with_payment() -> Config:
-    """결제 정보 포함 Config"""
+    """결제 정보 포함 Config (production)"""
     return Config(
         client_id="test_client_id",
         client_secret="test_client_secret",
-        base_url="https://development.codef.io",
+        base_url="https://api.codef.io",
         output_dir="./test_output",
         phone_no="01012345678",
         password="1234",
         eprepay_no="123456789012",
         eprepay_pass="test_pass",
+        env="production",
     )
 
 

@@ -185,17 +185,17 @@ class TestSingleAPI:
         data = r.json()
         assert data["status"] == "error"
 
-    def test_single_payment_validation(self):
-        """결제 필요한데 ePrepay 없음 → 에러"""
-        no_pay_cfg = Config(
+    def test_single_payment_validation_production(self):
+        """production에서 결제 필요한데 ePrepay 없음 → 에러"""
+        prod_cfg = Config(
             client_id="test", client_secret="test",
-            base_url="https://development.codef.io",
+            base_url="https://api.codef.io",
             output_dir=tempfile.mkdtemp(),
             phone_no="01012345678", password="1234",
-            eprepay_no="", eprepay_pass="",
+            eprepay_no="", eprepay_pass="", env="production",
         )
         from app import app
-        app.state.config = no_pay_cfg
+        app.state.config = prod_cfg
         client = TestClient(app, raise_server_exceptions=False)
         r = client.post("/api/single", json={
             "address": "test", "issue_type": "발급",

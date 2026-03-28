@@ -37,6 +37,7 @@ class Config:
     password: str
     eprepay_no: str
     eprepay_pass: str
+    env: str = "demo"  # demo / sandbox / production
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -68,4 +69,5 @@ class Config:
             password=password,
             eprepay_no=os.getenv("EPREPAY_NO", ""),
             eprepay_pass=os.getenv("EPREPAY_PASS", ""),
+            env=env,
         )

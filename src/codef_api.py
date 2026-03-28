@@ -228,7 +228,7 @@ class CodefRegisterClient:
         """CODEF 응답 파싱 (URL 디코딩 처리)"""
         data = response_json.get("data", {})
         if isinstance(data, str):
-            data = json.loads(urllib.parse.unquote(data))
+            data = json.loads(urllib.parse.unquote_plus(data))
         return data
 
     def request_register(
@@ -308,8 +308,9 @@ class CodefRegisterClient:
             response.raise_for_status()
 
             # CODEF 응답: JSON 또는 URL 인코딩된 JSON (text/plain)
+            # unquote_plus: %XX 디코딩 + '+'를 공백으로 변환
             body = response.text
-            decoded = urllib.parse.unquote(body)
+            decoded = urllib.parse.unquote_plus(body)
             result_json = json.loads(decoded)
             result_data = self._parse_response(result_json)
 

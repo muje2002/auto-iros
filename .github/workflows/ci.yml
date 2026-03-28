@@ -34,5 +34,8 @@ jobs:
       - name: Type check with mypy
         run: mypy src/ --ignore-missing-imports
 
+      - name: Verify imports
+        run: python -c "from src.config import Config; from src.codef_api import CodefRegisterClient; from app import app; print('All imports OK')"
+
       - name: Run tests
         run: pytest tests/ -v --tb=long -W ignore::DeprecationWarning

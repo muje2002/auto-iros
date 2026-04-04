@@ -161,6 +161,7 @@ async def execute_batch(body: ExecuteBody, request: Request):
         "results": [
             {
                 "address": s["address"],
+                "unique_no": s.get("unique_no", ""),
                 "status": s["status"],
                 "filename": os.path.basename(s["file"]) if s.get("file") else None,
                 "error": s.get("error"),

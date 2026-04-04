@@ -230,6 +230,42 @@ function showResult(res) {
         html += '</tbody></table></div>';
     }
 
+    // 고유번호 조회 결과
+    if (res.addr_list && res.addr_list.length > 0) {
+        html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-2">조회 결과 (${res.addr_list.length}건)</h3>`;
+        html += renderAddressTable(res.addr_list, { onQuery: true });
+        html += '</div>';
+    }
+
+    // 등기 상세 (표제부/갑구/을구)
+    if (res.register_entries && res.register_entries.length > 0) {
+        res.register_entries.forEach(entry => {
+            html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
+                <h3 class="font-semibold text-gray-800 mb-1">${entry.doc_title || '등기부등본'}</h3>
+                <p class="text-xs text-gray-500 mb-3">고유번호: ${entry.unique_no} | ${entry.realty || ''} | ${entry.registry_office || ''}</p>`;
+
+            entry.sections.forEach(section => {
+                if (!section.rows || section.rows.length === 0) return;
+                html += `<div class="mb-3">
+                    <h4 class="text-sm font-semibold text-blue-700 border-b border-blue-200 pb-1 mb-2">${section.type}</h4>
+                    <div class="overflow-x-auto"><table class="w-full text-xs border-collapse">
+                        <tbody>`;
+                section.rows.forEach(cells => {
+                    html += '<tr class="border-b border-gray-100">';
+                    cells.forEach(cell => {
+                        const cellText = (cell || '').replace(/\n/g, '<br>');
+                        html += `<td class="p-1.5 align-top">${cellText}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div></div>';
+            });
+
+            html += '</div>';
+        });
+    }
+
     document.getElementById('result-area').innerHTML = html;
 }
 </script>

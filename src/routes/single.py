@@ -14,7 +14,8 @@ from pydantic import BaseModel
 from ..codef_api import CodefRegisterClient, RegisterRequest, RegisterResult
 from ..config import Config
 from ..payment import validate_payment_config
-from ..register_parser import parse_registration_history, parse_registration_summary
+from ..pdf_handler import save_pdf
+from ..register_parser import parse_register_entries, parse_registration_history, parse_registration_summary
 from ..two_way import build_two_way_params
 
 router = APIRouter(prefix="/api/single", tags=["single"])
@@ -122,10 +123,11 @@ async def single_query(body: SingleBody, request: Request):
             "addr_list": result.addr_list or [],
         }
     elif result.success:
-        # 성공: PDF 저장
+        # 성공: PDF를 메모리 + 디스크에 저장
         session_id = uuid.uuid4().hex
         if result.pdf_base64:
             _pdf_store[session_id] = result.pdf_base64
+            save_pdf(result, config.output_dir)
         return _build_success_response(result, session_id)
     else:
         return {
@@ -164,10 +166,13 @@ async def two_way_select(body: TwoWayBody, request: Request):
     # 세션 정리
     del _sessions[body.session_id]
 
+    config: Config | None = request.app.state.config
     if result.success:
         pdf_id = uuid.uuid4().hex
         if result.pdf_base64:
             _pdf_store[pdf_id] = result.pdf_base64
+            if config:
+                save_pdf(result, config.output_dir)
         return _build_success_response(result, pdf_id)
     else:
         return {
@@ -198,13 +203,39 @@ def _build_success_response(result: RegisterResult, pdf_id: str) -> dict:
                 {"type": h.reg_type, "purpose": h.purpose, "date": h.date, "number": h.number}
                 for h in histories
             ]
+        # 등기 상세 (표제부/갑구/을구)
+        entries = parse_register_entries(result.data)
+        if entries:
+            resp["register_entries"] = [
+                {
+                    "unique_no": e.unique_no,
+                    "doc_title": e.doc_title,
+                    "realty": e.realty,
+                    "registry_office": e.registry_office,
+                    "sections": e.sections,
+                }
+                for e in entries
+            ]
+        # 고유번호조회 결과 (resAddrList)
+        raw_addr = result.data.get("resAddrList", [])
+        if raw_addr:
+            resp["addr_list"] = [
+                {
+                    "uniqueNo": a.get("commUniqueNo", a.get("uniqueNo", "")),
+                    "address": a.get("commAddrLotNumber", a.get("address", "")),
+                    "realtyType": a.get("resType", a.get("realtyType", "")),
+                    "owner": a.get("resUserNm", ""),
+                    "state": a.get("resState", ""),
+                }
+                for a in raw_addr
+            ]
     return resp
 
 
 @router.get("/pdf/{pdf_id}")
 async def download_pdf(pdf_id: str):
     """PDF 다운로드"""
-    pdf_b64 = _pdf_store.pop(pdf_id, None)
+    pdf_b64 = _pdf_store.get(pdf_id)
     if not pdf_b64:
         return {"status": "error", "message": "PDF를 찾을 수 없습니다."}
 

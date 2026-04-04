@@ -26,6 +26,14 @@ class RegistrationHistory:
     number: str  # 접수번호
 
 
+def _get_entry_data(data: dict) -> dict:
+    """resRegisterEntriesList 안의 첫 번째 entry를 반환 (없으면 data 자체)."""
+    entries = data.get("resRegisterEntriesList", [])
+    if entries and isinstance(entries, list):
+        return entries[0]
+    return data
+
+
 def parse_registration_summary(data: dict) -> list[RegistrationSummary]:
     """API 응답에서 주요등기사항 요약을 파싱.
 
@@ -35,7 +43,8 @@ def parse_registration_summary(data: dict) -> list[RegistrationSummary]:
     Returns:
         RegistrationSummary 리스트
     """
-    raw_list = data.get("resRegistrationSumList", [])
+    entry = _get_entry_data(data)
+    raw_list = entry.get("resRegistrationSumList", data.get("resRegistrationSumList", []))
     summaries = []
     for item in raw_list:
         summaries.append(RegistrationSummary(
@@ -47,6 +56,17 @@ def parse_registration_summary(data: dict) -> list[RegistrationSummary]:
     return summaries
 
 
+@dataclass
+class RegisterEntry:
+    """등기부등본 엔트리 기본 정보"""
+
+    unique_no: str
+    doc_title: str
+    realty: str
+    registry_office: str
+    sections: list[dict]  # 표제부/갑구/을구 섹션 데이터
+
+
 def parse_registration_history(data: dict) -> list[RegistrationHistory]:
     """API 응답에서 등기이력을 파싱.
 
@@ -56,7 +76,8 @@ def parse_registration_history(data: dict) -> list[RegistrationHistory]:
     Returns:
         RegistrationHistory 리스트
     """
-    raw_list = data.get("resRegistrationHisList", [])
+    entry = _get_entry_data(data)
+    raw_list = entry.get("resRegistrationHisList", data.get("resRegistrationHisList", []))
     histories = []
     for item in raw_list:
         histories.append(RegistrationHistory(
@@ -66,6 +87,49 @@ def parse_registration_history(data: dict) -> list[RegistrationHistory]:
             number=item.get("resNumber", item.get("resAcceptNo", "")),
         ))
     return histories
+
+
+def _clean_content(text: str) -> str:
+    """CODEF 응답의 &...& 마커를 제거하고 줄바꿈 정리."""
+    return text.replace("&", "").strip()
+
+
+def parse_register_entries(data: dict) -> list[RegisterEntry]:
+    """resRegisterEntriesList에서 표제부/갑구/을구 섹션을 파싱.
+
+    Args:
+        data: API 응답의 result_data dict
+
+    Returns:
+        RegisterEntry 리스트
+    """
+    entries_raw = data.get("resRegisterEntriesList", [])
+    result = []
+    for entry in entries_raw:
+        sections = []
+        for section in entry.get("resRegistrationHisList", []):
+            section_type = section.get("resType", "")
+            rows = []
+            for content in section.get("resContentsList", []):
+                if content.get("resType2") == "1":
+                    continue  # 헤더 행 스킵
+                cells = []
+                for detail in content.get("resDetailList", []):
+                    cells.append(_clean_content(detail.get("resContents", "")))
+                if any(cells):
+                    rows.append(cells)
+            sections.append({
+                "type": section_type,
+                "rows": rows,
+            })
+        result.append(RegisterEntry(
+            unique_no=entry.get("commUniqueNo", ""),
+            doc_title=entry.get("resDocTitle", ""),
+            realty=entry.get("resRealty", ""),
+            registry_office=entry.get("commCompetentRegistryOffice", ""),
+            sections=sections,
+        ))
+    return result
 
 
 def format_summary_text(summaries: list[RegistrationSummary]) -> str:

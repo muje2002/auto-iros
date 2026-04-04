@@ -198,6 +198,7 @@ function renderResults(res) {
                     <tr class="bg-gray-50 border-b">
                         <th class="text-left p-2 w-10">#</th>
                         <th class="text-left p-2">주소</th>
+                        <th class="text-left p-2 w-40">고유번호</th>
                         <th class="text-left p-2 w-16">상태</th>
                         <th class="text-left p-2 w-32">파일/오류</th>
                     </tr>
@@ -216,6 +217,7 @@ function renderResults(res) {
             <tr class="border-b">
                 <td class="p-2 text-gray-400">${i + 1}</td>
                 <td class="p-2">${r.address}</td>
+                <td class="p-2 font-mono text-xs">${r.unique_no || ''}</td>
                 <td class="p-2 ${statusClass} font-medium">${r.status}</td>
                 <td class="p-2">${detail}</td>
             </tr>`;

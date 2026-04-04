@@ -128,9 +128,8 @@ class RegisterRequest:
             "originDataYN": self.origin_data_yn,
         }
 
-        # 부동산 구분 (간편검색에서는 "토지+건물"=전체이므로 생략)
-        if self.realty_type and self.realty_type != "토지+건물":
-            params["realtyType"] = REALTY_TYPES.get(self.realty_type, "0")
+        # 부동산 구분 (항상 전송 — 생략 시 CF-13007 과다 검색 발생 가능)
+        params["realtyType"] = REALTY_TYPES.get(self.realty_type, "0")
 
         # 동/호
         if self.dong:
@@ -153,8 +152,16 @@ class RegisterRequest:
             # 고유번호
             params["uniqueNo"] = self.unique_no
         elif inquiry_code == "1":
-            # 간편검색
-            params["address"] = self.address
+            # 간편검색 — dong/ho는 간편검색에서 무시되므로 address에 병합
+            address = self.address
+            if self.realty_type == "집합건물" and (self.dong or self.ho):
+                parts = [address]
+                if self.dong:
+                    parts.append(self.dong)
+                if self.ho:
+                    parts.append(self.ho)
+                address = " ".join(parts)
+            params["address"] = address
             if self.addr_sido:
                 params["addr_sido"] = self.addr_sido
             params["recordStatus"] = self.record_status
@@ -295,7 +302,15 @@ class CodefRegisterClient:
 
             if is_two_way and two_way_info:
                 params["is2Way"] = True
-                params.update(two_way_info)
+                params["uniqueNo"] = two_way_info.get("uniqueNo", "")
+                params["twoWayInfo"] = {
+                    "jobIndex": two_way_info.get("jobIndex", ""),
+                    "threadIndex": two_way_info.get("threadIndex", ""),
+                    "jti": two_way_info.get("jti", ""),
+                    "twoWayTimestamp": two_way_info.get("twoWayTimestamp", ""),
+                }
+
+            logger.info("API 요청 파라미터: %s", {k: v for k, v in params.items() if k != "password"})
 
             timeout = API_TIMEOUT_SECOND if is_two_way else API_TIMEOUT_FIRST
 
@@ -328,13 +343,25 @@ class CodefRegisterClient:
                     pdf_base64=pdf_data if pdf_data else None,
                 )
             elif code == "CF-03002":
-                extra_info = result_data.get("extraInfo", result_data)
-                addr_list = extra_info.get("resAddrList", [])
+                # resAddrList는 extraInfo 내부에 위치
+                extra_info = result_data.get("extraInfo", {})
+                raw_addr_list = extra_info.get("resAddrList", result_data.get("resAddrList", []))
+                # API 필드명 → 내부 필드명 정규화 (commUniqueNo → uniqueNo 등)
+                addr_list = []
+                for item in raw_addr_list:
+                    addr_list.append({
+                        "uniqueNo": item.get("commUniqueNo", item.get("uniqueNo", "")),
+                        "address": item.get("commAddrLotNumber", item.get("address", item.get("resAddr", ""))),
+                        "owner": item.get("resUserNm", ""),
+                        "state": item.get("resState", ""),
+                        "realtyType": item.get("resType", item.get("realtyType", "")),
+                    })
+                # twoWayInfo는 data 최상위에 위치
                 ti = {
-                    "jobIndex": extra_info.get("jobIndex", ""),
-                    "threadIndex": extra_info.get("threadIndex", ""),
-                    "jti": extra_info.get("jti", ""),
-                    "twoWayTimestamp": extra_info.get("twoWayTimestamp", ""),
+                    "jobIndex": result_data.get("jobIndex", ""),
+                    "threadIndex": result_data.get("threadIndex", ""),
+                    "jti": result_data.get("jti", ""),
+                    "twoWayTimestamp": result_data.get("twoWayTimestamp", ""),
                 }
                 return RegisterResult(
                     request=req,

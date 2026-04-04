@@ -78,14 +78,12 @@ def create_template(output_path: str) -> str:
         for col_idx, value in enumerate(row_data, 1):
             guide.cell(row=row_idx, column=col_idx, value=value)
 
-    # 예시 데이터
+    # 예시 데이터 (실제 동작 확인된 주소)
     examples = [
-        ["간편검색", "테헤란로 123", "", "", "토지+건물", "전체", "열람",
+        ["간편검색", "테헤란로 152", "", "", "집합건물", "전체", "고유번호조회",
          "", "", "", "", "", "", ""],
-        ["간편검색", "서초대로 456", "101동", "202호", "집합건물", "전체", "열람",
+        ["간편검색", "강남대로 396", "", "", "집합건물", "전체", "고유번호조회",
          "", "", "", "", "", "", ""],
-        ["고유번호", "", "", "", "", "전체", "열람",
-         "1101-2024-123456", "", "", "", "", "", ""],
     ]
     for row_idx, example in enumerate(examples, 2):
         for col_idx, value in enumerate(example, 1):
@@ -164,24 +162,26 @@ def export_results(summaries: list[dict], output_path: str) -> str:
     ws.title = "조회 결과"
 
     # 헤더
-    result_headers = ["#", "주소/고유번호", "상태", "PDF 파일", "오류"]
+    result_headers = ["#", "주소/고유번호", "고유번호", "상태", "PDF 파일", "오류"]
     for col, header in enumerate(result_headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = cell.font.copy(bold=True)
 
     ws.column_dimensions["A"].width = 6
     ws.column_dimensions["B"].width = 50
-    ws.column_dimensions["C"].width = 8
-    ws.column_dimensions["D"].width = 40
+    ws.column_dimensions["C"].width = 18
+    ws.column_dimensions["D"].width = 8
     ws.column_dimensions["E"].width = 40
+    ws.column_dimensions["F"].width = 40
 
     # 데이터
     for i, s in enumerate(summaries, 1):
         ws.cell(row=i + 1, column=1, value=i)
         ws.cell(row=i + 1, column=2, value=s.get("address", ""))
-        ws.cell(row=i + 1, column=3, value=s.get("status", ""))
-        ws.cell(row=i + 1, column=4, value=s.get("file") or "")
-        ws.cell(row=i + 1, column=5, value=s.get("error") or "")
+        ws.cell(row=i + 1, column=3, value=s.get("unique_no", ""))
+        ws.cell(row=i + 1, column=4, value=s.get("status", ""))
+        ws.cell(row=i + 1, column=5, value=s.get("file") or "")
+        ws.cell(row=i + 1, column=6, value=s.get("error") or "")
 
     # 요약 시트
     summary_sheet = wb.create_sheet("요약")

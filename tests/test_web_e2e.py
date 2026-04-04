@@ -326,3 +326,131 @@ class TestBatchAPI:
         client, _ = app_client
         r = client.get("/api/batch/download/nonexistent.pdf")
         assert r.json()["status"] == "error"
+
+
+# === 배치 실행 ===
+
+
+class TestBatchExecute:
+    def _make_requests_data(self, count=2):
+        return [
+            {"inquiry_type": "간편검색", "address": f"addr{i}", "issue_type": "열람"}
+            for i in range(count)
+        ]
+
+    def test_execute_success(self, app_client):
+        """2건 모두 성공"""
+        client, _ = app_client
+        mock_result = RegisterResult(
+            request=RegisterRequest(address="test"),
+            success=True, code="CF-00000",
+            data={}, pdf_base64="cGRm",
+        )
+        with _mock_api(mock_result):
+            r = client.post("/api/batch/execute", json={
+                "requests_data": self._make_requests_data(2),
+            })
+        data = r.json()
+        assert data["status"] == "success"
+        assert data["success_count"] == 2
+        assert data["count"] == 2
+
+    def test_execute_mixed(self, app_client):
+        """1성공 + 1실패"""
+        client, _ = app_client
+        ok = RegisterResult(
+            request=RegisterRequest(address="ok"),
+            success=True, code="CF-00000", data={}, pdf_base64="cGRm",
+        )
+        fail = RegisterResult(
+            request=RegisterRequest(address="fail"),
+            success=False, code="CF-12000", error_message="실패",
+        )
+        with patch(
+            "src.codef_api.CodefRegisterClient.request_register",
+            side_effect=[ok, fail],
+        ):
+            r = client.post("/api/batch/execute", json={
+                "requests_data": self._make_requests_data(2),
+            })
+        data = r.json()
+        assert data["success_count"] == 1
+        assert len(data["failed_requests"]) == 1
+
+    def test_execute_no_config(self):
+        """config=None → .env 에러"""
+        from app import app
+        app.state.config = None
+        client = TestClient(app, raise_server_exceptions=False)
+        r = client.post("/api/batch/execute", json={
+            "requests_data": [{"inquiry_type": "간편검색", "address": "t", "issue_type": "열람"}],
+        })
+        assert r.json()["status"] == "error"
+        assert ".env" in r.json()["message"]
+
+    def test_execute_payment_validation(self):
+        """production + 결제 미설정 → 에러"""
+        prod_cfg = Config(
+            client_id="test", client_secret="test",
+            base_url="https://api.codef.io",
+            output_dir=tempfile.mkdtemp(),
+            phone_no="01012345678", password="1234",
+            eprepay_no="", eprepay_pass="", env="production",
+        )
+        from app import app
+        app.state.config = prod_cfg
+        client = TestClient(app, raise_server_exceptions=False)
+        r = client.post("/api/batch/execute", json={
+            "requests_data": [{"inquiry_type": "간편검색", "address": "t", "issue_type": "발급"}],
+        })
+        data = r.json()
+        assert data["status"] == "error"
+        assert "전자민원캐시" in data["message"]
+
+    def test_download_existing_file(self, app_client):
+        """실제 파일 다운로드 성공"""
+        client, cfg = app_client
+        os.makedirs(cfg.output_dir, exist_ok=True)
+        test_file = os.path.join(cfg.output_dir, "test.xlsx")
+        with open(test_file, "wb") as f:
+            f.write(b"fakecontent")
+        r = client.get("/api/batch/download/test.xlsx")
+        assert r.status_code == 200
+        assert "spreadsheet" in r.headers.get("content-type", "")
+
+
+# === 검색 realty_type 전달 ===
+
+
+class TestSearchRealtyType:
+    def test_search_passes_realty_type(self, app_client):
+        """realty_type이 RegisterRequest에 전달되는지 확인"""
+        client, _ = app_client
+        mock_result = RegisterResult(
+            request=RegisterRequest(address="test"),
+            success=False,
+            need_two_way=True,
+            addr_list=[{"address": "A", "uniqueNo": "001"}],
+        )
+        with patch("src.routes.search.CodefRegisterClient") as MockClient:
+            MockClient.return_value.request_register.return_value = mock_result
+            client.post("/api/search", json={"query": "테헤란로", "realty_type": "집합건물"})
+            call_args = MockClient.return_value.request_register.call_args
+            req_arg = call_args[0][0]
+            assert req_arg.realty_type == "집합건물"
+
+    def test_search_default_realty_type(self, app_client):
+        """realty_type 미지정 → 기본값 토지+건물"""
+        client, _ = app_client
+        mock_result = RegisterResult(
+            request=RegisterRequest(address="test"),
+            success=False,
+            need_two_way=True,
+            addr_list=[{"address": "A", "uniqueNo": "001"}],
+        )
+        with patch("src.routes.search.CodefRegisterClient") as MockClient:
+            MockClient.return_value.request_register.return_value = mock_result
+            client.post("/api/search", json={"query": "테헤란로"})
+            call_args = MockClient.return_value.request_register.call_args
+            req_arg = call_args[0][0]
+            assert req_arg.realty_type == "토지+건물"

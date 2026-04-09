@@ -106,7 +106,7 @@ class RegisterRequest:
     select_address: str = "0"
     is_identity_view_yn: str = "0"
     identity_list: list[dict] = field(default_factory=list)
-    origin_data_yn: str = "0"
+    origin_data_yn: str = "1"  # 1: 원문Data(PDF) 포함 — 발급/열람 시 PDF 받기 위해 필수
 
     def to_api_params(self, config: Config) -> dict:
         """API 요청 파라미터로 변환"""

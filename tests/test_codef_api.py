@@ -129,6 +129,13 @@ class TestRegisterRequest:
         assert params["addr_buildingNumber"] == "123"
 
     @_encrypt_mock
+    def test_origin_data_yn_default_is_1(self, _mock, mock_config):
+        """originDataYN 기본값은 '1' (PDF 발급 필수)"""
+        req = RegisterRequest(address="test")
+        params = req.to_api_params(mock_config)
+        assert params["originDataYN"] == "1"
+
+    @_encrypt_mock
     def test_realty_type_default_included(self, _mock, mock_config):
         """토지+건물(기본값)도 realtyType=0으로 전송 (CF-13007 수정)"""
         req = RegisterRequest(address="테헤란로", realty_type="토지+건물")

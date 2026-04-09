@@ -15,7 +15,7 @@ from ..codef_api import CodefRegisterClient, RegisterRequest, RegisterResult
 from ..config import Config
 from ..payment import validate_payment_config
 from ..pdf_handler import save_pdf
-from ..register_parser import parse_register_entries, parse_registration_history, parse_registration_summary
+from ..register_parser import parse_register_entries
 from ..two_way import build_two_way_params
 
 router = APIRouter(prefix="/api/single", tags=["single"])
@@ -191,19 +191,7 @@ def _build_success_response(result: RegisterResult, pdf_id: str) -> dict:
         "display_name": result.request.display_name,
     }
     if result.data:
-        summaries = parse_registration_summary(result.data)
-        histories = parse_registration_history(result.data)
-        if summaries:
-            resp["registration_summary"] = [
-                {"category": s.category, "content": s.content, "date": s.date}
-                for s in summaries
-            ]
-        if histories:
-            resp["registration_history"] = [
-                {"type": h.reg_type, "purpose": h.purpose, "date": h.date, "number": h.number}
-                for h in histories
-            ]
-        # 등기 상세 (표제부/갑구/을구)
+        # 등기 상세 (요약 + 이력 표제부/갑구/을구)
         entries = parse_register_entries(result.data)
         if entries:
             resp["register_entries"] = [
@@ -212,7 +200,24 @@ def _build_success_response(result: RegisterResult, pdf_id: str) -> dict:
                     "doc_title": e.doc_title,
                     "realty": e.realty,
                     "registry_office": e.registry_office,
-                    "sections": e.sections,
+                    "publish_no": e.publish_no,
+                    "publish_date": e.publish_date,
+                    "summary_sections": [
+                        {
+                            "type": s.type,
+                            "type1": s.type1,
+                            "rows": [r.cells for r in s.rows],
+                        }
+                        for s in e.summary_sections
+                    ],
+                    "history_sections": [
+                        {
+                            "type": s.type,
+                            "type1": s.type1,
+                            "rows": [r.cells for r in s.rows],
+                        }
+                        for s in e.history_sections
+                    ],
                 }
                 for e in entries
             ]

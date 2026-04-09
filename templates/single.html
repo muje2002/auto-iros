@@ -197,40 +197,7 @@ function showResult(res) {
     }
     html += '</div>';
 
-    // 등기사항 요약
-    if (res.registration_summary && res.registration_summary.length > 0) {
-        html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-2">등기사항 요약</h3>
-            <table class="w-full text-sm border-collapse">
-                <thead><tr class="bg-gray-50 border-b">
-                    <th class="text-left p-2">구분</th>
-                    <th class="text-left p-2">내용</th>
-                    <th class="text-left p-2 w-28">접수일자</th>
-                </tr></thead><tbody>`;
-        res.registration_summary.forEach(s => {
-            html += `<tr class="border-b"><td class="p-2 font-medium">${s.category}</td><td class="p-2">${s.content}</td><td class="p-2 text-gray-500">${s.date}</td></tr>`;
-        });
-        html += '</tbody></table></div>';
-    }
-
-    // 등기 이력
-    if (res.registration_history && res.registration_history.length > 0) {
-        html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-2">등기 이력</h3>
-            <table class="w-full text-sm border-collapse">
-                <thead><tr class="bg-gray-50 border-b">
-                    <th class="text-left p-2 w-20">유형</th>
-                    <th class="text-left p-2">등기 목적</th>
-                    <th class="text-left p-2 w-28">접수일자</th>
-                    <th class="text-left p-2 w-24">접수번호</th>
-                </tr></thead><tbody>`;
-        res.registration_history.forEach(h => {
-            html += `<tr class="border-b"><td class="p-2">${h.type}</td><td class="p-2">${h.purpose}</td><td class="p-2 text-gray-500">${h.date}</td><td class="p-2 text-gray-500">${h.number}</td></tr>`;
-        });
-        html += '</tbody></table></div>';
-    }
-
-    // 고유번호 조회 결과
+    // 고유번호 조회 결과 (resAddrList)
     if (res.addr_list && res.addr_list.length > 0) {
         html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
             <h3 class="font-semibold text-gray-800 mb-2">조회 결과 (${res.addr_list.length}건)</h3>`;
@@ -238,29 +205,60 @@ function showResult(res) {
         html += '</div>';
     }
 
-    // 등기 상세 (표제부/갑구/을구)
+    // 등기 상세 (요약 + 표제부/갑구/을구)
     if (res.register_entries && res.register_entries.length > 0) {
         res.register_entries.forEach(entry => {
             html += `<div class="bg-white rounded-lg shadow p-4 mb-4">
                 <h3 class="font-semibold text-gray-800 mb-1">${entry.doc_title || '등기부등본'}</h3>
-                <p class="text-xs text-gray-500 mb-3">고유번호: ${entry.unique_no} | ${entry.realty || ''} | ${entry.registry_office || ''}</p>`;
+                <p class="text-xs text-gray-500 mb-3">고유번호: ${entry.unique_no}${entry.realty ? ' | ' + entry.realty : ''}${entry.registry_office ? ' | ' + entry.registry_office : ''}${entry.publish_date ? ' | ' + entry.publish_date : ''}</p>`;
 
-            entry.sections.forEach(section => {
-                if (!section.rows || section.rows.length === 0) return;
-                html += `<div class="mb-3">
-                    <h4 class="text-sm font-semibold text-blue-700 border-b border-blue-200 pb-1 mb-2">${section.type}</h4>
-                    <div class="overflow-x-auto"><table class="w-full text-xs border-collapse">
-                        <tbody>`;
-                section.rows.forEach(cells => {
-                    html += '<tr class="border-b border-gray-100">';
-                    cells.forEach(cell => {
-                        const cellText = (cell || '').replace(/\n/g, '<br>');
-                        html += `<td class="p-1.5 align-top">${cellText}</td>`;
+            // 주요 등기사항 요약
+            if (entry.summary_sections && entry.summary_sections.length > 0) {
+                const hasRows = entry.summary_sections.some(s => s.rows && s.rows.length > 0);
+                if (hasRows) {
+                    html += '<h4 class="text-sm font-semibold text-amber-700 border-b border-amber-200 pb-1 mb-2 mt-3">주요 등기사항 요약</h4>';
+                    entry.summary_sections.forEach(section => {
+                        if (!section.rows || section.rows.length === 0) return;
+                        html += `<div class="mb-3 ml-2">
+                            <p class="text-xs font-medium text-gray-700 mb-1">${section.type}${section.type1 ? ' · ' + section.type1 : ''}</p>
+                            <div class="overflow-x-auto"><table class="w-full text-xs border-collapse">
+                                <tbody>`;
+                        section.rows.forEach(cells => {
+                            html += '<tr class="border-b border-gray-100">';
+                            cells.forEach(cell => {
+                                const cellText = (cell || '').replace(/\n/g, '<br>');
+                                html += `<td class="p-1.5 align-top">${cellText}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table></div></div>';
                     });
-                    html += '</tr>';
-                });
-                html += '</tbody></table></div></div>';
-            });
+                }
+            }
+
+            // 등기 이력 (표제부/갑구/을구)
+            if (entry.history_sections && entry.history_sections.length > 0) {
+                const hasRows = entry.history_sections.some(s => s.rows && s.rows.length > 0);
+                if (hasRows) {
+                    html += '<h4 class="text-sm font-semibold text-blue-700 border-b border-blue-200 pb-1 mb-2 mt-3">등기 이력</h4>';
+                    entry.history_sections.forEach(section => {
+                        if (!section.rows || section.rows.length === 0) return;
+                        html += `<div class="mb-3 ml-2">
+                            <p class="text-xs font-medium text-gray-700 mb-1">${section.type}${section.type1 ? ' · ' + section.type1 : ''}</p>
+                            <div class="overflow-x-auto"><table class="w-full text-xs border-collapse">
+                                <tbody>`;
+                        section.rows.forEach(cells => {
+                            html += '<tr class="border-b border-gray-100">';
+                            cells.forEach(cell => {
+                                const cellText = (cell || '').replace(/\n/g, '<br>');
+                                html += `<td class="p-1.5 align-top">${cellText}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table></div></div>';
+                    });
+                }
+            }
 
             html += '</div>';
         });
